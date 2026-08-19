@@ -13,6 +13,16 @@ st.title("سیستم جامع مدیریت کلاف و محل جوش T-Joint")
 st.markdown("---")
 
 # ==========================================
+# مدیریت وضعیت بانک کلاف‌ها (Session State)
+# ==========================================
+if "coils_bank" not in st.session_state:
+    st.session_state.coils_bank = [
+        {"id": 2, "weight": 23000.0, "used": False},
+        {"id": 3, "weight": 23000.0, "used": False},
+        {"id": 4, "weight": 23000.0, "used": False}
+    ]
+
+# ==========================================
 # بخش ۱: مشخصات پایه پروژه و استانداردهای کیفی
 # ==========================================
 st.header("۱. مشخصات پایه پروژه")
@@ -54,13 +64,12 @@ with col_p4:
 STEEL_DENSITY = steel_density_g_cm3 * 1e-6 
 
 # محاسبات هندسی پایه
-D_mean = D_outer - t_wall  # قطر متوسط (mm)
-Perimeter = math.pi * D_mean  # محیط لوله (mm)
+D_mean = D_outer - t_wall  
+Perimeter = math.pi * D_mean  
 sin_alpha = W_strip / Perimeter
 alpha_deg = math.degrees(math.asin(sin_alpha))
-Pitch = W_strip / math.cos(math.radians(alpha_deg))  # گام جوش (mm)
+Pitch = W_strip / math.cos(math.radians(alpha_deg))  
 
-# نمایش خلاصه مشخصات پایه
 st.info(
     f"**پارامترهای پایه پروژه:** "
     f"گرید: **{steel_grade}** | "
@@ -107,29 +116,25 @@ L_strip_total = coil_weight_kg / (W_strip * t_wall * STEEL_DENSITY)
 L_pipe_total = L_strip_total * sin_alpha
 T_theoretical_mm = L_pipe_total % L_branch
 
-# محاسبات دقیق ضایعات با احتساب برش سر و ته کلاف
+# محاسبات ضایعات با احتساب برش سر و ته
 L_loss_pipe_mm = (T_theoretical_mm - T_actual_mm) + head_cut_mm + tail_cut_mm
 if L_loss_pipe_mm < 0:
     L_loss_pipe_mm += L_branch 
 
 L_loss_pipe_m = L_loss_pipe_mm / 1000.0
 
-# تبدیل طول لوله ضایعات به طول واقعی ورق بازشده بر پایه هلیکس (تقسیم بر sin_alpha)
+# طول ورق ضایعاتی بازشده بر پایه زاویه هلیکس
 L_strip_loss_mm = L_loss_pipe_mm / sin_alpha
 L_strip_loss_m = L_strip_loss_mm / 1000.0
 
-# مساحت و وزن دقیق ورق ضایعات
 Scrap_Area_m2 = L_strip_loss_m * (W_strip / 1000.0)
 Scrap_Weight_kg = L_strip_loss_mm * W_strip * t_wall * STEEL_DENSITY
 
-# انحراف طول شاخه استثنایی
 length_offset_mm = L_actual_branch - L_branch
 
-# بررسی تداخل T در کلاف جاری
 is_start_conflict = (T_actual_mm <= T_limit_mm) or (T_actual_mm >= (L_branch - T_limit_mm))
 start_status_msg = "⚠️ خطر تداخل T با برش" if is_start_conflict else "✅ وضعیت عادی"
 
-# نمایش خروجی کلاف جاری
 st.subheader("تحلیل کلاف جاری")
 
 col_r1, col_r2, col_r3 = st.columns(3)
@@ -149,44 +154,80 @@ with col_r3:
 st.markdown("---")
 
 # ==========================================
-# بخش ۳: بانک کلاف‌ها و پیش‌بینی T-Joint
+# بخش ۳: بانک کلاف‌ها و پیش‌بینی T-Joint بعدی (دینامیک)
 # ==========================================
 st.header("۳. بانک کلاف‌ها و پیش‌بینی T-Joint بعدی")
 
-st.markdown("وزن کلاف‌های بعدی را وارد کنید تا موقعیت دقیق T و تداخل آن با خط برش بررسی شود.")
+# افزودن کلاف جدید
+col_add1, col_add2 = st.columns([3, 1])
+with col_add1:
+    new_weight = st.number_input("وزن کلاف جدید (kg)", value=23000.0, step=500.0, key="new_coil_weight")
+with col_add2:
+    st.write(" ")
+    st.write(" ")
+    if st.button("➕ افزودن کلاف به لیست", use_container_width=True):
+        next_id = st.session_state.coils_bank[-1]["id"] + 1 if st.session_state.coils_bank else 2
+        st.session_state.coils_bank.append({"id": next_id, "weight": new_weight, "used": False})
+        st.rerun()
 
-num_coils = st.number_input("تعداد کلاف‌های بعدی برای پیش‌بینی", min_value=1, max_value=10, value=3)
+st.markdown("#### مدیریت و لیست کلاف‌های ثبت‌شده")
 
-coil_inputs = []
-cols = st.columns(min(num_coils, 4))
-for i in range(num_coils):
-    with cols[i % 4]:
-        w = st.number_input(f"وزن کلاف #{i+2} (kg)", value=23000.0, step=500.0, key=f"coil_{i}")
-        coil_inputs.append(w)
+# نمایش و مدیریت کلاف‌ها
+if not st.session_state.coils_bank:
+    st.warning("هیچ کلافی در بانک ثبت نشده است.")
+else:
+    for idx, coil in enumerate(st.session_state.coils_bank):
+        c_col1, c_col2, c_col3, c_col4 = st.columns([1.5, 2.5, 2, 1])
+        
+        with c_col1:
+            st.markdown(f"**کلاف #{coil['id']}**")
+        
+        with c_col2:
+            new_w = st.number_input(
+                f"وزن (kg)",
+                value=coil["weight"],
+                step=500.0,
+                key=f"w_{coil['id']}_{idx}"
+            )
+            st.session_state.coils_bank[idx]["weight"] = new_w
+            
+        with c_col3:
+            is_used = st.checkbox("مصرف‌شده", value=coil["used"], key=f"u_{coil['id']}_{idx}")
+            st.session_state.coils_bank[idx]["used"] = is_used
+            
+        with c_col4:
+            if st.button("🗑️ حذف", key=f"del_{coil['id']}_{idx}"):
+                st.session_state.coils_bank.pop(idx)
+                st.rerun()
 
-# انتقال دقیق مبدأ با کالیبراسیون T واقعی و شاخه استثنایی
+# پیش‌بینی T-Joint بر اساس کلاف‌های فعال (مصرف‌نشده)
+st.subheader("جدول پیش‌بینی T-Joint (فقط کلاف‌های فعال)")
+
 accumulated_position_mm = T_actual_mm + length_offset_mm
-
-st.subheader("جدول پیش‌بینی و تحلیل خطای برش")
-
 prediction_data = []
 
-for idx, w_kg in enumerate(coil_inputs, start=2):
-    strip_len = w_kg / (W_strip * t_wall * STEEL_DENSITY)
-    pipe_len = strip_len * sin_alpha
-    
-    accumulated_position_mm = (accumulated_position_mm + pipe_len) % L_branch
-    
-    has_conflict = (accumulated_position_mm <= T_limit_mm) or (accumulated_position_mm >= (L_branch - T_limit_mm))
-    status_str = "⚠️ خطر تداخل با برش" if has_conflict else "✅ وضعیت عادی"
-    
-    prediction_data.append({
-        "شماره کلاف": f"کلاف #{idx}",
-        "وزن کلاف (kg)": f"{w_kg:,.0f}",
-        "خروجی لوله (m)": f"{pipe_len / 1000.0:.2f}",
-        "موقعیت T روی شاخه (mm)": f"{accumulated_position_mm:.2f}",
-        "حد مجاز (mm)": f"{T_limit_mm:.0f}",
-        "وضعیت تداخل T با برش": status_str
-    })
+active_coils = [c for c in st.session_state.coils_bank if not c["used"]]
 
-st.table(prediction_data)
+if not active_coils:
+    st.info("تمام کلاف‌های بانک مصرف شده‌اند یا کلافی وجود ندارد.")
+else:
+    for coil in active_coils:
+        w_kg = coil["weight"]
+        strip_len = w_kg / (W_strip * t_wall * STEEL_DENSITY)
+        pipe_len = strip_len * sin_alpha
+        
+        accumulated_position_mm = (accumulated_position_mm + pipe_len) % L_branch
+        
+        has_conflict = (accumulated_position_mm <= T_limit_mm) or (accumulated_position_mm >= (L_branch - T_limit_mm))
+        status_str = "⚠️ خطر تداخل با برش" if has_conflict else "✅ وضعیت عادی"
+        
+        prediction_data.append({
+            "شماره کلاف": f"کلاف #{coil['id']}",
+            "وزن کلاف (kg)": f"{w_kg:,.0f}",
+            "خروجی لوله (m)": f"{pipe_len / 1000.0:.2f}",
+            "موقعیت T روی شاخه (mm)": f"{accumulated_position_mm:.2f}",
+            "حد مجاز (mm)": f"{T_limit_mm:.0f}",
+            "وضعیت تداخل T با برش": status_str
+        })
+
+    st.table(prediction_data)
