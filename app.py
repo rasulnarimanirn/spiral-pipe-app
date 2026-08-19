@@ -83,8 +83,11 @@ col_c1, col_c2 = st.columns(2)
 with col_c1:
     coil_weight_kg = st.number_input("وزن کلاف جاری (kg)", value=23000.0, step=500.0)
     T_actual_mm = st.number_input("فاصله واقعی T تا برش روی خط (mm)", value=400.0, step=10.0)
+    head_cut_mm = st.number_input("اندازه برش سر کلاف (mm)", value=0.0, step=50.0)
 
 with col_c2:
+    tail_cut_mm = st.number_input("اندازه برش ته کلاف (mm)", value=0.0, step=50.0)
+    
     st.write("**کنترل برش غیر استاندارد (تست کیفیت یا فرار از تداخل T با تیغه):**")
     custom_branch_active = st.checkbox(
         "فعال‌سازی طول غیر استاندارد برای شاخه آخر کلاف"
@@ -104,14 +107,14 @@ L_strip_total = coil_weight_kg / (W_strip * t_wall * STEEL_DENSITY)
 L_pipe_total = L_strip_total * sin_alpha
 T_theoretical_mm = L_pipe_total % L_branch
 
-# محاسبات دقیق ضایعات بر اساس زاویه هلیکس (ورق بازشده واقعی)
-L_loss_pipe_mm = T_theoretical_mm - T_actual_mm
+# محاسبات دقیق ضایعات با احتساب برش سر و ته کلاف
+L_loss_pipe_mm = (T_theoretical_mm - T_actual_mm) + head_cut_mm + tail_cut_mm
 if L_loss_pipe_mm < 0:
     L_loss_pipe_mm += L_branch 
 
 L_loss_pipe_m = L_loss_pipe_mm / 1000.0
 
-# تبدیل مستقیم طول لوله ضایعات به طول ورق بازشده
+# تبدیل طول لوله ضایعات به طول واقعی ورق بازشده بر پایه هلیکس (تقسیم بر sin_alpha)
 L_strip_loss_mm = L_loss_pipe_mm / sin_alpha
 L_strip_loss_m = L_strip_loss_mm / 1000.0
 
@@ -135,7 +138,7 @@ with col_r1:
     st.metric("موقعیت نظری T", f"{T_theoretical_mm:.2f} mm")
 
 with col_r2:
-    st.metric("طول لوله ضایعات", f"{L_loss_pipe_m:.2f} m ({L_loss_pipe_mm:.0f} mm)")
+    st.metric("طول کل لوله ضایعات", f"{L_loss_pipe_m:.2f} m ({L_loss_pipe_mm:.0f} mm)")
     st.metric("طول ورق ضایعاتی بازشده", f"{L_strip_loss_m:.2f} m")
     st.metric("مساحت ورق ضایعات", f"{Scrap_Area_m2:.2f} m²")
 
