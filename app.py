@@ -1,129 +1,121 @@
-import streamlit as st
 import math
 
-st.set_page_config(page_title="سیستم مدیریت خط تولید لوله اسپیرال", layout="wide")
+class SpiralPipeOptimizer:
+    def __init__(self):
+        # ۱. مشخصات پایه پروژه
+        self.project_specs = {}
+        # ۲. بانک کلاف‌های موجود (kg)
+        self.coils_bank = []
+        # ۳. اطلاعات کلاف جاری
+        self.current_coil = {}
 
-st.title("⚙️ سیستم هوشمند برنامه‌ریزی کلاف و کنترل T-Joint")
-st.subheader("پروژه تولید لوله اسپیرال")
+    def set_project_specs(self, grade, strip_width, strip_thickness, pipe_diameter, pipe_length, min_t_distance):
+        """ثبت مشخصات پایه پروژه (همه طول‌ها به میلی‌متر)"""
+        self.project_specs = {
+            "grade": grade,
+            "strip_width": strip_width,        # mm
+            "strip_thickness": strip_thickness, # mm
+            "pipe_diameter": pipe_diameter,    # mm
+            "pipe_length": pipe_length,        # mm
+            "min_t_distance": min_t_distance   # mm (حد مجاز T تا برش)
+        }
 
-# --- بخش اول: مشخصات فنی پروژه ---
-st.sidebar.header("📋 مشخصات فنی پروژه")
-pipe_diameter = st.sidebar.number_input("قطر بیرونی لوله (mm)", value=1800.0, step=10.0)
-wall_thickness = st.sidebar.number_input("ضخامت ورق (mm)", value=14.2, step=0.1)
-strip_width = st.sidebar.number_input("عرض کلاف (mm)", value=1500.0, step=10.0)
-target_pipe_length = st.sidebar.number_input("طول استاندارد هر شاخه لوله (m)", value=12.0, step=0.1)
-min_safe_t_dist = st.sidebar.number_input("حداقل فاصله ایمن T تا برش (cm)", value=50.0, step=5.0)
+    def add_coils_to_bank(self, weights_list):
+        """افزودن لیست وزن کلاف‌ها (به کیلوگرم)"""
+        self.coils_bank.extend(weights_list)
 
-# محاسبات اولیه هندسی اسپیرال
-# D_m = قطر متوسط
-d_mean = pipe_diameter - wall_thickness
-# زاویه حلزونی (Helix Angle)
-sin_alpha = strip_width / (math.pi * d_mean)
-alpha_rad = math.asin(sin_alpha)
-# وزن هر متر ورق (کیلوگرم بر متر)
-# W = 7.85 * width(m) * thickness(mm)
-weight_per_meter_strip = 7.85 * (strip_width / 1000.0) * wall_thickness
+    def set_current_coil(self, weight_kg, end_crop_mm, t_to_cut_distance_mm):
+        """ثبت اطلاعات کلاف جاری (استارت)"""
+        self.current_coil = {
+            "weight_kg": weight_kg,
+            "end_crop_mm": end_crop_mm,
+            "t_to_cut_distance_mm": t_to_cut_distance_mm
+        }
 
-st.sidebar.markdown("---")
-st.sidebar.info(f"📐 **زاویه حلزونی:** {math.degrees(alpha_rad):.2f} درجه\n\n⚖️ **وزن هر متر ورق:** {weight_per_meter_strip:.2f} kg/m")
+    def _calculate_coil_length(self, weight_kg):
+        """محاسبه طول ورق کلاف (میلی‌متر) بر اساس وزن، ضخامت و عرض (چگالی فولاد 7.85g/cm3)"""
+        density = 7.85e-6  # kg/mm³
+        volume = weight_kg / density
+        length_mm = volume / (self.project_specs["strip_width"] * self.project_specs["strip_thickness"])
+        return length_mm
 
-# --- بخش دوم: ثبت مشخصات کلاف‌ها ---
-st.header("📦 ثبت اطلاعات کلاف‌های پروژه")
+    def _calculate_helix_angle(self):
+        """محاسبه زاویه حلزونی (آلفا)"""
+        # sin(alpha) = strip_width / (pi * pipe_diameter)
+        sin_alpha = self.project_specs["strip_width"] / (math.pi * self.project_specs["pipe_diameter"])
+        return math.asin(sin_alpha)
 
-num_coils = st.number_input("تعداد کلاف‌های پروژه:", min_value=1, max_value=50, value=12, step=1)
+    def run_analysis(self):
+        """محاسبه و پیش‌بینی فاصله T تا برش برای کلاف‌های بعدی"""
+        alpha = self_angle = self._calculate_helix_angle()
+        pipe_len = self.project_specs["pipe_length"]
+        min_t_dist = self.project_specs["min_t_distance"]
 
-coil_data = []
-col1, col2 = st.columns(2)
+        print("\n" + "="*50)
+        print("   نتایج پردازش و پیش‌بینی خط تولید لوله اسپیرال")
+        print("="*50)
 
-with col1:
-    st.write("### مشخصات کلاف‌ها")
-    for i in range(int(num_coils)):
-        c_cols = st.columns(3)
-        with c_cols[0]:
-            weight = st.number_input(f"وزن کلاف {i+1} (تن):", value=15.0 + (i % 3), step=0.5, key=f"w_{i}")
-        with c_cols[1]:
-            head_crop = st.number_input(f"برش سر کلاف {i+1} (cm):", value=50.0, step=5.0, key=f"hc_{i}")
-        with c_cols[2]:
-            tail_crop = st.number_input(f"برش ته کلاف {i+1} (cm):", value=30.0, step=5.0, key=f"tc_{i}")
+        # محاسبه برای کلاف جاری
+        curr_len = self._calculate_coil_length(self.current_coil["weight_kg"]) - self.current_coil["end_crop_mm"]
+        # تبدیل طول ورق به طول لوله روی محور اسپیرال
+        curr_pipe_produced = curr_len / math.cos(alpha)
         
-        # طول کل کلاف بر اساس وزن
-        strip_length_m = (weight * 1000.0) / weight_per_meter_strip
-        usable_strip_m = strip_length_m - (head_crop / 100.0) - (tail_crop / 100.0)
-        # طول لوله حاصل از این کلاف (با در نظر گرفتن زاویه حلزونی)
-        pipe_length_m = usable_strip_m / sin_alpha
-        
-        coil_data.append({
-            'id': i + 1,
-            'weight_ton': weight,
-            'head_crop_m': head_crop / 100.0,
-            'tail_crop_m': tail_crop / 100.0,
-            'strip_length_m': strip_length_m,
-            'pipe_length_m': pipe_length_m
-        })
+        # محاسبه فاصله اولین T کلاف بعدی تا خط برش
+        rem_distance = (curr_pipe_produced - self.current_coil["t_to_cut_distance_mm"]) % pipe_len
+        next_t_dist = (pipe_len - rem_distance) % pipe_len
 
-# --- بخش سوم: تحلیل و شبیه‌سازی خط تولید ---
-if st.button("🚀 تحلیل زنجیره تولید و بررسی T-Joint‌ها", type="primary"):
-    st.markdown("---")
-    st.header("📊 نتایج شبیه‌سازی و وضعیت T-Joint‌ها")
-    
-    current_position_in_pipe = 0.0 # موقعیت لوله جاری نسبت به خط برش
-    total_pipes_produced = 0
-    total_scrap_weight_kg = 0.0
-    total_useful_pipe_length_m = 0.0
-    
-    warnings = []
-    
-    for idx, coil in enumerate(coil_data):
-        st.subheader(f"🌀 کلاف شماره {coil['id']} (وزن: {coil['weight_ton']} تن)")
+        print(f"\n[کلاف جاری - استارت]")
+        print(f"• وزن: {self.current_coil['weight_kg']} kg")
+        print(f"• فاصله T فعلی تا برش: {self.current_coil['t_to_cut_distance_mm']} mm")
         
-        # محاسبه ضایعات سر و ته کلاف
-        head_tail_scrap_kg = (coil['head_crop_m'] + coil['tail_crop_m']) * weight_per_meter_strip
-        total_scrap_weight_kg += head_tail_scrap_kg
+        status = "مجاز" if self.current_coil["t_to_cut_distance_mm"] >= min_t_dist else "❌ غیرمجاز (تداخل T با برش)"
+        print(f"• وضعیت T فعلی: {status}")
+
+        print("\n" + "-"*50)
+        print("پیش‌بینی فاصله T تا برش برای کلاف‌های بانک داده:")
+        print("-"*50)
+
+        accumulated_pipe_len = self.current_coil["t_to_cut_distance_mm"]
         
-        coil_pipe_len = coil['pipe_length_m']
-        remaining_in_coil = coil_pipe_len
-        
-        st.write(f"- **طول لوله حاصل از این کلاف:** {coil_pipe_len:.2f} متر")
-        
-        # بررسی T-Joint اتصال کلاف قبلی به این کلاف
-        if idx > 0:
-            # موقعیت T دقیقاً در نقطه‌ای است که کلاف قبلی تمام شده و کلاف جدید شروع شده
-            t_distance_to_next_cut = target_pipe_length - current_position_in_pipe
+        for idx, weight in enumerate(self.coils_bank, 1):
+            coil_strip_len = self._calculate_coil_length(weight)
+            coil_pipe_len = coil_strip_len / math.cos(alpha)
             
-            st.info(f"📍 **موقعیت T-Joint (جوش وصله کلاف {coil['id']-1} به {coil['id']}):** {t_distance_to_next_cut:.2f} متر قبل از خط برش بعدی")
+            # فاصله T این کلاف تا برش
+            t_distance = (accumulated_pipe_len + coil_pipe_len) % pipe_len
             
-            if t_distance_to_next_cut < (min_safe_t_dist / 100.0) or (target_pipe_length - t_distance_to_next_cut) < (min_safe_t_dist / 100.0):
-                st.error(f"⚠️ **هشدار برخورد T به برش!** در اتصال کلاف {coil['id']-1} به {coil['id']}، فاصله T تا خط برش تنها {t_distance_to_next_cut*100:.1f} سانتی‌متر است.")
-                
-                # ارائه راهکار برون‌رفت
-                shift_needed_cm = (min_safe_t_dist) - (t_distance_to_next_cut * 100.0)
-                st.warning(f"""
-                💡 **راهکارهای پیشنهادی برون‌رفت از مشکل:**
-                1. **تغییر برش سرکلاف:** مقدار برش سر کلاف شماره {coil['id']} را به میزان **{abs(shift_needed_cm):.1f} سانتی‌متر** تغییر (افزایش/کاهش) دهید.
-                2. **تغییر طول برش شاخه قبل:** طول شاخه لوله قبل از T را به جای {target_pipe_length} متر، برابر **{(target_pipe_length - (shift_needed_cm/100.0)):.2f} متر** برش بزنید.
-                """)
-        
-        # شاخه‌بندی کلاف
-        while (current_position_in_pipe + remaining_in_coil) >= target_pipe_length:
-            needed_to_complete = target_pipe_length - current_position_in_pipe
-            remaining_in_coil -= needed_to_complete
-            current_position_in_pipe = 0.0
-            total_pipes_produced += 1
-            total_useful_pipe_length_m += target_pipe_length
+            is_valid = t_distance >= min_t_dist and (pipe_len - t_distance) >= min_t_dist
+            flag = "✅ مجاز" if is_valid else "⚠️ غیرمجاز (نیاز به اصلاح برش/طول)"
+
+            print(f"کلاف شماره {idx:02d} | وزن: {weight} kg | فاصله T تا برش: {t_distance:.1f} mm | وضعیت: {flag}")
             
-        current_position_in_pipe += remaining_in_coil
-        st.write(f"- **باقیمانده کلاف روی شاخه جاری:** {current_position_in_pipe:.2f} متر")
-        st.markdown("---")
-        
-    # --- بخش چهارم: گزارش پایانی ضایعات و عملکرد ---
-    st.header("📈 گزارش نهایی پروژه")
-    
-    col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-    
-    total_project_weight_ton = sum(c['weight_ton'] for c in coil_data)
-    total_pipe_weight_ton = (total_useful_pipe_length_m * weight_per_meter_strip * sin_alpha) / 1000.0
-    
-    col_res1.metric("تعداد کل شاخه‌های ۱۲ متری", f"{total_pipes_produced} شاخه")
-    col_res2.metric("متراژ کل لوله مفید", f"{total_useful_pipe_length_m:.2f} متر")
-    col_res3.metric("کل ضایعات پروژه", f"{total_scrap_weight_kg:.1f} kg")
-    col_res4.metric("بازدهی مصرف ورق", f"{((total_pipe_weight_ton/total_project_weight_ton)*100):.1f}%")
+            # بروزرسانی نقطه مبنا برای کلاف بعدی
+            accumulated_pipe_len = t_distance
+
+
+# --- نمونه اجرای آزمایشی ---
+if __name__ == "__main__":
+    app = SpiralPipeOptimizer()
+
+    # ۱. ثبت مشخصات پروژه (طول‌ها به میلی‌متر)
+    app.set_project_specs(
+        grade="ST37",
+        strip_width=1500,       # mm
+        strip_thickness=10,     # mm
+        pipe_diameter=1200,     # mm
+        pipe_length=12000,      # mm
+        min_t_distance=500      # mm (حد مجاز فاصله T تا برش)
+    )
+
+    # ۲. ورود کلاف‌های باقی‌مانده پروژه (kg)
+    app.add_coils_to_bank([12000, 12500, 11800, 12200])
+
+    # ۳. ورود مشخصات کلاف جاری (استارت)
+    app.set_current_coil(
+        weight_kg=12000,
+        end_crop_mm=300,        # mm برش آخر کلاف
+        t_to_cut_distance_mm=4500 # mm فاصله T فعلی تا برش
+    )
+
+    # ۴. اجرای خروجی اولیه
+    app.run_analysis()
