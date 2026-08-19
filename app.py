@@ -9,38 +9,50 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("سیستم مدیریت کلاف و محل جوش T-Joint")
+st.title("سیستم جامع مدیریت کلاف و محل جوش T-Joint")
 st.markdown("---")
 
 # ==========================================
-# بخش ۱: مشخصات پایه پروژه
+# بخش ۱: مشخصات پایه پروژه و گرید فولاد
 # ==========================================
-st.header("۱. مشخصات پایه پروژه")
+st.header("۱. مشخصات پایه پروژه و گرید ورق")
 
 col_p1, col_p2, col_p3, col_p4 = st.columns(4)
 
 with col_p1:
     D_outer = st.number_input("قطر خارجی لوله - D (mm)", value=1800.0, step=1.0)
+    steel_grade = st.selectbox(
+        "گرید ورق (Steel Grade)",
+        options=["ST37 / S235", "ST52 / S355", "API 5L X42", "API 5L X52", "سفارشی / سایر"]
+    )
+
 with col_p2:
     t_wall = st.number_input("ضخامت ورق - t (mm)", value=14.2, step=0.1)
+    if steel_grade == "سفارشی / سایر":
+        steel_density_g_cm3 = st.number_input("چگالی سفارشی (g/cm³)", value=7.85, step=0.01)
+    else:
+        steel_density_g_cm3 = 7.85
+
 with col_p3:
     W_strip = st.number_input("عرض ورق - W (mm)", value=1500.0, step=1.0)
+
 with col_p4:
     L_branch = st.number_input("طول شاخه استاندارد (mm)", value=12020.0, step=10.0)
 
-# چگالی فولاد (kg/mm^3)
-STEEL_DENSITY = 7.85e-6 
+# تبدیل چگالی به kg/mm^3
+STEEL_DENSITY = steel_density_g_cm3 * 1e-6 
 
 # محاسبات هندسی پایه
-D_mean = D_outer - t_wall  # قطر متوسط
+D_mean = D_outer - t_wall  # قطر متوسط (mm)
 Perimeter = math.pi * D_mean  # محیط (mm)
 sin_alpha = W_strip / Perimeter
 alpha_deg = math.degrees(math.asin(sin_alpha))
 Pitch = W_strip / math.cos(math.radians(alpha_deg))  # گام جوش (mm)
 
-# نمایش پارامترهای محاسبه شده
+# نمایش پارامترهای پایه
 st.info(
-    f"**پارامترهای هندسی محاسبه شده:** "
+    f"**مشخصات استخراج‌شده:** "
+    f"گرید انتخابی: **{steel_grade}** | "
     f"قطر متوسط: **{D_mean:.2f} mm** | "
     f"محیط (C): **{Perimeter:.2f} mm ({Perimeter/1000:.3f} m)** | "
     f"زاویه هلیکس (&alpha;): **{alpha_deg:.2f}°** | "
@@ -61,14 +73,14 @@ with col_c1:
     T_actual_mm = st.number_input("فاصله واقعی T تا برش (mm)", value=400.0, step=10.0)
 
 with col_c2:
-    st.write("**کنترل برش غیر استاندارد (تست یا فرار از تداخل T):**")
+    st.write("**کنترل برش غیر استاندارد (تست کیفیت یا فرار از تداخل T با تیغه):**")
     custom_branch_active = st.checkbox(
-        "فعال‌سازی طول غیر استاندارد برای شاخه آخر"
+        "فعال‌سازی طول غیر استاندارد برای شاخه آخر کلاف"
     )
     
     if custom_branch_active:
         L_actual_branch = st.number_input(
-            "طول واقعی شاخه برش‌خورده (mm)",
+            "طول واقعی شاخه بریده‌شده (mm)",
             value=L_branch,
             step=10.0
         )
@@ -87,8 +99,9 @@ if L_loss_pipe_mm < 0:
 
 L_loss_pipe_m = L_loss_pipe_mm / 1000.0
 Scrap_Area_m2 = L_loss_pipe_m * (Perimeter / 1000.0)
-Scrap_Weight_kg = Scrap_Area_m2 * (t_wall / 1000.0) * 7850.0
+Scrap_Weight_kg = Scrap_Area_m2 * (t_wall / 1000.0) * (steel_density_g_cm3 * 1000.0)
 
+# محاسبه انحراف طول شاخه استثنایی
 length_offset_mm = L_actual_branch - L_branch
 
 # نمایش نتایج کلاف جاری
@@ -104,17 +117,17 @@ with col_r2:
     st.metric("مساحت ورق ضایعات", f"{Scrap_Area_m2:.2f} m²")
 
 with col_r3:
-    st.metric("وزن ضایعات", f"{Scrap_Weight_kg:.1f} kg")
+    st.metric("وزن خالص ضایعات", f"{Scrap_Weight_kg:.1f} kg")
     st.metric("جبران طول شاخه", f"{length_offset_mm:+.1f} mm")
 
 st.markdown("---")
 
 # ==========================================
-# بخش ۳: پیش‌بینی کلاف‌های بانک
+# بخش ۳: بانک کلاف‌ها و پیش‌بینی T-Joint بعدی
 # ==========================================
 st.header("۳. بانک کلاف‌ها و پیش‌بینی T-Joint بعدی")
 
-st.markdown("وزن کلاف‌های بعدی را وارد کنید تا موقعیت T در شاخه‌های آینده پیش‌بینی شود.")
+st.markdown("وزن کلاف‌های بعدی را وارد کنید تا موقعیت T در شاخه‌های آینده با دقت میلی‌متری پیش‌بینی شود.")
 
 num_coils = st.number_input("تعداد کلاف‌های بعدی برای پیش‌بینی", min_value=1, max_value=10, value=3)
 
@@ -127,7 +140,7 @@ for i in range(num_coils):
 
 current_accumulated_pipe_mm = (L_pipe_total - L_loss_pipe_mm) + length_offset_mm
 
-st.subheader("جدول پیش‌بینی")
+st.subheader("جدول پیش‌بینی بانک کلاف‌ها")
 
 prediction_data = []
 
@@ -143,6 +156,7 @@ for idx, w_kg in enumerate(coil_inputs, start=2):
     prediction_data.append({
         "شماره کلاف": f"کلاف #{idx}",
         "وزن کلاف (kg)": f"{w_kg:,.0f}",
+        "گرید ورق": steel_grade,
         "خروجی لوله (m)": f"{pipe_len / 1000.0:.2f}",
         "موقعیت T روی شاخه (mm)": f"{predicted_T_position_mm:.2f}",
         "شماره شاخه هدف": f"{branch_number}"
